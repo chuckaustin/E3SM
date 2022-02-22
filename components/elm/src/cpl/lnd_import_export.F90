@@ -13,6 +13,8 @@ module lnd_import_export
   use mct_mod
   !
   implicit none
+
+  include 'mpif.h'
   !===============================================================================
 
 contains
@@ -128,6 +130,7 @@ contains
     real(r8) :: msize,msize0, msize1     ! memory size (high water)
     real(r8) :: mrss ,mrss0 , mrss1      ! resident size (current memory use)
     character(*), parameter :: FormatR = '(A,": =============== ", A31,F12.3,1x,  " ===============")'
+    double precision :: t0, t1
 
     data caldaym / 1, 32, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335, 366 /    
 
@@ -197,6 +200,7 @@ contains
 #ifdef TPROF
     if(atm2lnd_vars%loaded_bypassdata==0) then
          call t_startf("lnd_import_cplbypass_dataload")
+         t0 = MPI_Wtime()
          call shr_mem_getusage(msize,mrss)
          write(1000+iam,*) ' '
          write(1000+iam,*) ' ---------------------------------------------------------------------- '
@@ -485,13 +489,6 @@ contains
 
 #ifdef TPROF
             call t_stopf("cplbypass_metdata_read")
-            if (g==bounds%endg) then ! when last grid data read, checking memory usage
-              call shr_mem_getusage(msize,mrss)
-              write(1000+iam,*) ' '
-              write(1000+iam,*) ' metdata ', v, trim(metvars(v))
-              write(1000+iam,FormatR) 'cplbypass_metdata_read', ' memory highwater  (MB)     = ', msize
-              write(1000+iam,FormatR) 'cplbypass_metdata_read', ' memory current usage (MB)  = ', mrss
-            endif
 #endif
     
             if (use_sitedata .and. v == 1) then 
@@ -814,12 +811,6 @@ contains
 
 #ifdef TPROF
               call t_stopf("cplbypass_popdens_read")
-              if (g==bounds%endg) then ! when last grid data read, checking memory usage
-                call shr_mem_getusage(msize,mrss)
-                write(1000+iam,*) ' '
-                write(1000+iam,FormatR) 'cplbypass_popdens_read', ' memory highwater  (MB)     = ', msize
-                write(1000+iam,FormatR) 'cplbypass_popdens_read', ' memory current usage (MB)  = ', mrss
-              endif
 #endif
 
             end if
@@ -890,12 +881,6 @@ contains
 
 #ifdef TPROF
             call t_stopf("cplbypass_lightng_read")
-            if (g==bounds%endg) then ! when last grid data read, checking memory usage
-              call shr_mem_getusage(msize,mrss)
-              write(1000+iam,*) ' '
-              write(1000+iam,FormatR) 'cplbypass_lightng_read', ' memory highwater  (MB)     = ', msize
-              write(1000+iam,FormatR) 'cplbypass_lightng_read', ' memory current usage (MB)  = ', mrss
-            endif
 #endif
           end if
           if (atm2lnd_vars%loaded_bypassdata .eq. 0 .and. i .eq. 1) then
@@ -1074,12 +1059,6 @@ contains
 
 #ifdef TPROF
             call t_stopf("cplbypass_aero_read")
-            if (g==bounds%endg) then ! when last grid data read, checking memory usage
-              call shr_mem_getusage(msize,mrss)
-              write(1000+iam,*) ' '
-              write(1000+iam,FormatR) 'cplbypass_aero_read', ' memory highwater  (MB)     = ', msize
-              write(1000+iam,FormatR) 'cplbypass_aero_read', ' memory current usage (MB)  = ', mrss
-            endif
 #endif
           end if
           if (i .eq. 1) then 
@@ -1216,12 +1195,6 @@ contains
 
 #ifdef TPROF
           call t_stopf("cplbypass_co2_read")
-          if (g==bounds%endg) then ! when last grid data read, checking memory usage
-            call shr_mem_getusage(msize,mrss)
-            write(1000+iam,*) ' '
-            write(1000+iam,FormatR) 'cplbypass_co2_read', ' memory highwater  (MB)     = ', msize
-            write(1000+iam,FormatR) 'cplbypass_co2_read', ' memory current usage (MB)  = ', mrss
-          endif
 #endif
         end if
 
@@ -1490,11 +1463,15 @@ contains
     if(atm2lnd_vars%loaded_bypassdata==0) then
       call t_stopf("lnd_import_cplbypass_dataload")
       !
+      t1 = MPI_Wtime()
       call shr_mem_getusage(msize,mrss)
       write(1000+iam,*) ' '
       write(1000+iam,FormatR) 'cplbypass_dataload - done', ' memory highwater  (MB)     = ', msize
       write(1000+iam,FormatR) 'cplbypass_dataload - done', ' memory current usage (MB)  = ', mrss
+
+#if 0
       if (masterproc) then
+        ! the following is very slow on Summit (unknown reason and comment it out now)
         call shr_mpi_min(msize ,msize0,mpicom,' cplbypass_dataload msize0', all=.true.)
         call shr_mpi_max(msize ,msize1,mpicom,' cplbypass_dataload msize1', all=.true.)
         call shr_mpi_min(mrss  ,mrss0,mpicom,'  cplbypass_dataload mrss0',  all=.true.)
@@ -1506,6 +1483,8 @@ contains
         write(1000+iam,FormatR) ' ',' pes min memory last usage (MB)  = ',mrss0
         write(1000+iam,FormatR) ' ',' pes max memory last usage (MB)  = ',mrss1
       endif
+#endif
+      write(1000+iam,*) 'cplbypass_dataload - done in mpi-walltime of ', t1 - t0
     endif
 #endif
 
